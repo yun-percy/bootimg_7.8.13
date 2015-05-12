@@ -1,0 +1,52 @@
+#!/bin/bash
+# 
+# It is continuous work for the boot.img
+# It take mkbootfs, minigzip and mkbootimg to finish the work,
+# one of these tools change may result the target img change
+# So take care to update these tools.
+#
+# baodingzhou
+#
+
+function failed {
+    echo $1 >&2
+    exit $2
+}
+
+function usage {
+    echo "Usage : repack_boot dir boot.img"
+    echo -e "\trepack_boot boot newboot.img" 
+}
+
+if [ $# -ne 2 ];then                              
+    usage
+    failed "" -1
+fi
+
+RAMDISKGZ=$(mktemp)_ramdisk.gz
+
+if [ ! -f $1/kernel ];then
+    failed 'kernel not found!' -1
+elif [ ! -d $1/RAMDISK ];then
+    failed 'RAMDISK not found!' -1
+fi
+
+# In the future it may need the *_filesystem_config.txt
+mkbootfs $1/RAMDISK | minigzip > ${RAMDISKGZ}
+if [ $? -ne 0 ];then
+    failed 'Repack ramdisk.gz error!' -1
+fi
+
+cmd_args="${cmd_args} --kernel $1/kernel --ramdisk ${RAMDISKGZ}"
+
+for item in base kernel_offset ramdisk_offset second_offset tags_offset cmdline pagesize
+do
+    if [ -f $1/$item ];then
+        value=`cat $1/$item`
+        cmd_args="${cmd_args} --$item \"$value\""
+    fi
+done
+
+
+echo "${cmd_args} -o $2" | xargs mkbootimg && rm ${RAMDISKGZ}
+
